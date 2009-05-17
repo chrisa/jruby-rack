@@ -16,6 +16,8 @@ module JRuby
                                dqm.init(LocalContext.new)
                                dqm
                              end
+          $servlet_context.setAttribute(Java::OrgJrubyRackJms::QueueManager::MGR_KEY,
+                                        @queue_manager)
         end
 
         def stop_queue_manager

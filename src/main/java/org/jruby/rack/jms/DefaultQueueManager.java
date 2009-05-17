@@ -102,8 +102,9 @@ public class DefaultQueueManager implements QueueManager {
     public void destroy() {
         for (Iterator it = queues.keySet().iterator(); it.hasNext();) {
             String queueName = (String)it.next();
-            closeConnections(queues.remove(queueName));
+            closeConnections(queues.get(queueName));
         }
+	queues.clear();
         connectionFactory = null;
     }
 

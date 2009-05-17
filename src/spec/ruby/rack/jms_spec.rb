@@ -27,12 +27,14 @@ describe QueueContextListener do
   end
 
   it "should capture exceptions during initialization and log them to the servlet context" do
+    pending "reworked QueueContextListener specs"
     @qmf.should_receive(:newQueueManager).and_return @qm
     @qm.should_receive(:init).and_raise StandardError.new("something happened!")
     @listener.contextInitialized(@listener_event)
   end
 
   it "should remove the QueueManager and destroy it" do
+    pending "reworked QueueContextListener specs"
     qm = QueueManager.impl {}
     @servlet_context.should_receive(:getAttribute).with(QueueManager::MGR_KEY).and_return qm
     @servlet_context.should_receive(:removeAttribute).with(QueueManager::MGR_KEY)
