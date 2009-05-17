@@ -10,6 +10,7 @@ import java.io.ByteArrayInputStream;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.Properties;
 import javax.jms.Message;
 import javax.jms.MessageListener;
@@ -37,7 +38,7 @@ public class DefaultQueueManager implements QueueManager {
     private ConnectionFactory connectionFactory = null;
     private RackContext context;
     private Context jndiContext;
-    private Map<String,Connection> queues = new HashMap<String,Connection>();
+    private Map<String,ArrayList<Connection>> queues = new HashMap<String,ArrayList<Connection>>();
     private RubyRuntimeAdapter rubyRuntimeAdapter = JavaEmbedUtils.newRuntimeAdapter();
     private RubyObjectAdapter rubyObjectAdapter = JavaEmbedUtils.newObjectAdapter();
 
@@ -64,27 +65,29 @@ public class DefaultQueueManager implements QueueManager {
     }
 
     public synchronized void listen(String queueName) {
-        Connection conn = queues.get(queueName);
-        if (conn == null) {
-            try {
-                conn = connectionFactory.createConnection();
-                Session session = conn.createSession(false, Session.AUTO_ACKNOWLEDGE);
-                Destination dest = (Destination) lookup(queueName);
-                MessageConsumer consumer = session.createConsumer(dest);
-                consumer.setMessageListener(new RubyObjectMessageListener(queueName));
-                queues.put(queueName, conn);
-                conn.start();
-            } catch (Exception e) {
-                context.log("Unable to listen to '"+queueName+"': " + e.getMessage(), e);
-            }
-        // } else { ... already listening on that queue
-        }
+        ArrayList<Connection> conns = queues.get(queueName);
+        if (conns == null) {
+	    conns = new ArrayList<Connection>();
+	    queues.put(queueName, conns);
+	}
+	
+	try {
+	    Connection conn = connectionFactory.createConnection();
+	    Session session = conn.createSession(false, Session.AUTO_ACKNOWLEDGE);
+	    Destination dest = (Destination) lookup(queueName);
+	    MessageConsumer consumer = session.createConsumer(dest);
+	    consumer.setMessageListener(new RubyObjectMessageListener(queueName));
+	    conn.start();
+	    conns.add(conn);
+	} catch (Exception e) {
+	    context.log("Unable to listen to '"+queueName+"': " + e.getMessage(), e);
+	}
     }
 
     public synchronized void close(String queueName) {
-        Connection conn = queues.remove(queueName);
-        if (conn != null) {
-            closeConnection(conn);
+        ArrayList<Connection> conns = queues.remove(queueName);
+        if (conns != null) {
+	    closeConnections(conns);
         }
     }
 
@@ -97,20 +100,22 @@ public class DefaultQueueManager implements QueueManager {
     }
 
     public void destroy() {
-        for (Iterator it = queues.entrySet().iterator(); it.hasNext();) {
-            Map.Entry<String,Connection> entry = (Map.Entry<String, Connection>) it.next();
-            closeConnection(entry.getValue());
+        for (Iterator it = queues.keySet().iterator(); it.hasNext();) {
+            String queueName = (String)it.next();
+            closeConnections(queues.remove(queueName));
         }
-        queues.clear();
         connectionFactory = null;
     }
 
-    private void closeConnection(Connection conn) {
-        try {
-            conn.close();
-        } catch (Exception e) {
-            context.log("exception while closing connection: " + e.getMessage(), e);
-        }
+    private void closeConnections(ArrayList<Connection> conns) {
+	for (Iterator it = conns.iterator(); it.hasNext();) {
+	    Connection conn = (Connection) it.next();
+	    try {
+		conn.close();
+	    } catch (Exception e) {
+		context.log("exception while closing connection: " + e.getMessage(), e);
+	    }
+	}
     }
 
     private class RubyObjectMessageListener implements MessageListener {
@@ -125,11 +130,11 @@ public class DefaultQueueManager implements QueueManager {
             RackApplication app = null;
             try {
                 app = rackFactory.getApplication();
-                Ruby runtime = app.getRuntime();
-                IRubyObject obj = rubyRuntimeAdapter.eval(runtime, "JRuby::Rack::Queues::Registry");
-                rubyObjectAdapter.callMethod(obj, "receive_message", new IRubyObject[] {
-                    JavaEmbedUtils.javaToRuby(runtime, queueName),
-                    JavaEmbedUtils.javaToRuby(runtime, message)});
+		Ruby runtime = app.getRuntime();
+		IRubyObject obj = rubyRuntimeAdapter.eval(runtime, "JRuby::Rack::Queues::Registry");
+		rubyObjectAdapter.callMethod(obj, "receive_message", new IRubyObject[] {
+			JavaEmbedUtils.javaToRuby(runtime, queueName),
+			JavaEmbedUtils.javaToRuby(runtime, message)});
             } catch (Exception e) {
                 context.log("exception during message reception: " + e.getMessage(), e);
             } finally {

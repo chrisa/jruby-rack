@@ -54,6 +54,14 @@ module JRuby
           queue_manager.listen(queue_name)
         end
 
+        def register_listener_threads(queue_name, concurrency = 1, listener = nil, &block)
+          array_dispatcher = (listeners[queue_name] ||= ArrayMessageDispatcher.new)
+          array_dispatcher.add_dispatcher MessageDispatcher.new(block.nil? ? listener : block)
+          concurrency.times do 
+            queue_manager.listen(queue_name)
+          end
+        end
+
         def unregister_listener(listener)
           listeners.delete_if do |k,v|
             v.delete_listener listener
