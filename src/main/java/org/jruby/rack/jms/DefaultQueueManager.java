@@ -8,6 +8,7 @@ package org.jruby.rack.jms;
 
 import java.io.ByteArrayInputStream;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
@@ -18,10 +19,10 @@ import javax.jms.ConnectionFactory;
 import javax.jms.Destination;
 import javax.jms.MessageConsumer;
 import javax.jms.Session;
-import javax.jms.ExceptionListener;
 import javax.jms.JMSException;
 import javax.naming.Context;
 import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import org.jruby.Ruby;
 import org.jruby.RubyObjectAdapter;
 import org.jruby.RubyRuntimeAdapter;
@@ -36,13 +37,14 @@ import org.jruby.runtime.builtin.IRubyObject;
  * @author nicksieger
  */
 public class DefaultQueueManager implements QueueManager {
-    private ConnectionFactory connectionFactory = null;
-    private Connection conn = null;
-    private HashMap<String, Session> sessions = new HashMap<String, Session>();
-    private RackContext context;
-    private Context jndiContext;
     private RubyRuntimeAdapter rubyRuntimeAdapter = JavaEmbedUtils.newRuntimeAdapter();
     private RubyObjectAdapter rubyObjectAdapter = JavaEmbedUtils.newObjectAdapter();
+    private ConnectionFactory connectionFactory = null;
+    private Connection conn = null;
+    private RackContext context;
+    private Context jndiContext;
+    private Map<String, ArrayList<Session>> queue_sessions = 
+	new HashMap<String, ArrayList<Session>>();
 
     public DefaultQueueManager() {
     }
@@ -75,29 +77,41 @@ public class DefaultQueueManager implements QueueManager {
 		return;
 	    }
 	}
-	
+
+	ArrayList<Session> sessions = (ArrayList<Session>) queue_sessions.get(queueName);
+	if (sessions == null) {
+	    sessions = new ArrayList<Session>();
+	}
+
 	try {
 	    Session session = conn.createSession(false, Session.AUTO_ACKNOWLEDGE);
 	    Destination dest = (Destination) lookup(queueName);
 	    MessageConsumer consumer = session.createConsumer(dest);
 	    consumer.setMessageListener(new RubyObjectMessageListener(queueName));
-	    conn.setExceptionListener(new ConnectionExceptionListener());
 	    conn.start();
-	    sessions.put(queueName, session);
-	} catch (Exception e) {
-	    context.log("Unable to listen to '"+queueName+"': " + e.getMessage(), e);
+	    sessions.add(session);
+	    queue_sessions.put(queueName, sessions);
+	} catch (JMSException e) {
+	    context.log("Unable to listen to '"+queueName+"': JMS: " + e.getMessage(), e);
+	} catch (NamingException e) {
+	    context.log("Unable to listen to '"+queueName+"': Naming: " + e.getMessage(), e);
 	}
     }
 
     public synchronized void close(String queueName) {
-	Session session = (Session) sessions.remove(queueName);
-	try {
-	    session.close();
-	} catch (JMSException e) {
-	    context.log("Unable to close session for queue " + queueName + ": " + e.getMessage());
-	}
-	if (sessions.isEmpty()) {
-	    closeConnection();
+	ArrayList<Session> sessions = (ArrayList<Session>) queue_sessions.remove(queueName);
+	if (sessions != null) {
+	    try {
+		for (Iterator it = sessions.iterator(); it.hasNext();) {
+		    Session session = (Session)it.next();
+		    session.close();
+		}
+	    } catch (JMSException e) {
+		context.log("Unable to close session for queue " + queueName + ": " + e.getMessage());
+	    }
+	    if (queue_sessions.isEmpty()) {
+		closeConnection();
+	    }
 	}
     }
 
@@ -122,16 +136,6 @@ public class DefaultQueueManager implements QueueManager {
 	    } catch (JMSException e) {
 		context.log("exception while closing connection: " + e.getMessage(), e);
 	    }
-	}
-    }
-
-    private class ConnectionExceptionListener implements ExceptionListener {
-
-	public ConnectionExceptionListener() {
-	}
-
-	public void onException (JMSException e) {
-	    context.log("JMSException: " + e.getMessage());
 	}
     }
 

@@ -16,15 +16,9 @@ import org.jruby.rack.servlet.ServletRackContext;
  * @author nicksieger
  */
 public class QueueContextListener implements ServletContextListener {
-    private QueueManagerFactory factory;
     private QueueManager queueManager;
     
     public QueueContextListener() {
-        this.factory = null;
-    }
-    
-    public QueueContextListener(QueueManagerFactory qmf) {
-        this.factory = qmf;
     }
     
     public void contextInitialized(ServletContextEvent event) {
@@ -35,16 +29,5 @@ public class QueueContextListener implements ServletContextListener {
         if (queueManager != null) {
             queueManager.destroy();
         }
-    }
-
-    private QueueManagerFactory newQueueManagerFactory() {
-        if (factory != null) {
-            return factory;
-        }
-        return new QueueManagerFactory() {
-            public QueueManager newQueueManager() {
-                return new DefaultQueueManager();
-            }
-        };
     }
 }
