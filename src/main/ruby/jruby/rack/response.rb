@@ -26,7 +26,7 @@ class JRuby::Rack::Response
   end
 
   def respond(response)
-    if fwd = @headers["Forward"]
+    if (fwd = @headers["Forward"]) && fwd.respond_to?(:call)
       fwd.call(response)
     else
       write_status(response)
@@ -47,8 +47,10 @@ class JRuby::Rack::Response
       when /^Content-Length$/i
         response.setContentLength(v.to_i)
       else
-        if v.respond_to?(:each)
-          v.each {|val| response.addHeader(k.to_s, val) }
+        if v.respond_to?(:each_line)
+          v.each_line {|val| response.addHeader(k.to_s, val.chomp("\n")) }
+        elsif v.respond_to?(:each)
+          v.each {|val| response.addHeader(k.to_s, val.chomp("\n")) }
         else
           case v
           when Numeric

@@ -145,7 +145,7 @@ describe Rack::Handler::Servlet, "create_env" do
     [:gets, :read, :each].each {|sym| input.respond_to?(sym).should == true }
     (errors = env['rack.errors']).should_not be_nil
     [:puts, :write, :flush].each {|sym| errors.respond_to?(sym).should == true }
-    env['java.servlet_request'].should == @env
+    env['java.servlet_request'].should == @servlet_env
   end
 
   it "should add cgi variables" do
@@ -231,7 +231,15 @@ describe Rack::Handler::Servlet, "create_env" do
   it "should calculate path info from the servlet path and the path info" do
     stub_env :getContextPath => "/context", :getServletPath => "/path"
     env = @servlet.create_lazy_env @env
+    env["SCRIPT_NAME"].should == "/context/path"
     env["PATH_INFO"].should == "/path"
+  end
+
+  it "should work correctly when running under the root context" do
+    stub_env :getContextPath => "", :getServletPath => "/"
+    env = @servlet.create_lazy_env @env
+    env["PATH_INFO"].should == "/"
+    env["SCRIPT_NAME"].should == ""
   end
 
   it "should include query string in the request URI" do
