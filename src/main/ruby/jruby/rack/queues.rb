@@ -12,7 +12,6 @@ module JRuby
 
       class QueueRegistry
         def initialize
-          setup_rails_dispatcher_prepare_hook
         end
 
         # Called into by the JRuby-Rack java code when an asynchronous message
@@ -100,21 +99,6 @@ module JRuby
           raise "Unable to dispatch: #{message.inspect}"
         end
 
-        def setup_rails_dispatcher_prepare_hook
-          if defined?(::Rails)
-            begin
-              require 'dispatcher'
-              dispatcher = defined?(ActionController::Dispatcher) &&
-                ActionController::Dispatcher || defined?(::Dispatcher) && ::Dispatcher
-              if dispatcher && dispatcher.respond_to?(:to_prepare)
-                dispatcher.to_prepare do
-                  ::JRuby::Rack::Queues::Registry.clear_listeners
-                end
-              end
-            rescue Exception => e
-            end
-          end
-        end
       end
 
       Registry = QueueRegistry.new
