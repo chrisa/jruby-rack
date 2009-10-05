@@ -21,7 +21,8 @@ module JRuby
         end
 
         def stop_queue_manager
-          @queue_manager.destroy
+          @queue_manager.destroy if !@queue_manager.nil?
+          @queue_manager = nil
         end
       end
 
