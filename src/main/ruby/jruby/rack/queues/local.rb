@@ -10,11 +10,10 @@ module JRuby
   module Rack
     module Queues
       class QueueRegistry
-        def start_queue_manager
+        def start_queue_manager(qm=Java::OrgJrubyRackJms::DefaultQueueManager.new)
           @queue_manager ||= begin
-                               dqm = Java::OrgJrubyRackJms::DefaultQueueManager.new
-                               dqm.init(LocalContext.new)
-                               dqm
+                               qm.init(LocalContext.new)
+                               qm
                              end
           $servlet_context.setAttribute(Java::OrgJrubyRackJms::QueueManager::MGR_KEY,
                                         @queue_manager) if $servlet_context

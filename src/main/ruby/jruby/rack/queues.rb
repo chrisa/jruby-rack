@@ -150,6 +150,8 @@ module JRuby
             message = Marshal.load(payload)
           elsif message.respond_to?(:getText)
             message = message.getText
+          elsif message.respond_to?(:toBodyString)
+            message = message.toBodyString
           end
           message
         end
